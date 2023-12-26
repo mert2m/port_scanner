@@ -3,56 +3,61 @@ import optparse
 from socket import *
 from threading import *
 
-kilitekrani = Semaphore(value = 1) #
+kilitekrani = Semaphore(value=1)  # Create a semaphore
 
-
-def baglanTara(hdfHost, hdfPort):
+def connectScan(targetHost, targetPort):
     try:
-        baglanSoket = socket(AF_INET, SOCK_STREAM) #soket açma fonksiyonu
-        baglanSoket.connect(hdfHost, hdfPort)
-        baglanSoket.send("")
-        results = baglanSoket.recv(100)
-        kilitekrani.acquire() #acquire çağrısı
-        print("[+] %d/tcp açıldı" % hdfPort)
-        print("[+] "+str(results))
-    except:
+        connectSocket = socket(AF_INET, SOCK_STREAM)  # Create a socket
+        connectSocket.connect((targetHost, targetPort))  # Establish connection
+        connectSocket.send(b"")  # Send an empty data
+        results = connectSocket.recv(100)  # Receive data
+        kilitekrani.acquire()  # Acquire the lock
+        print("[+] %d/tcp opened" % targetPort)
+        print("[+] " + str(results))
+    except Exception as e:
         kilitekrani.acquire()
-        print("[-] %d/tcp kapandı" % hdfPort)
+        print("[-] %d/tcp closed" % targetPort)
     finally:
         kilitekrani.release()
-        baglanSoket.close()
-def portTara(hdfHost, hdfPort):
+        connectSocket.close()
+
+def portScan(targetHost, targetPorts):
     try:
-        hdfIp = gethostbyname(hdfHost) #host adından ip edinme
+        targetIp = gethostbyname(targetHost)  # Resolve host to IP
     except:
-        print("[-] Çözümlenemedi '%s': Bilinmeyen host" %hdfHost)
+        print("[-] Cannot resolve '%s': Unknown host" % targetHost)
         return
+
     try:
-        hdfAd = gethostbyaddr(hdfIp) # ipden host adını öğrenme
-        print("\n[+] Arama sonuçları için: "+ hdfAd[0])
+        targetName = gethostbyaddr(targetIp)  # Get hostname from IP
+        print("\n[+] Search results for: " + targetName[0])
     except:
-        print("\n[+] Arama sonuçları için: " + hdfIp)
+        print("\n[+] Search results for: " + targetIp)
         setdefaulttimeout(1)
-    for hdfHost in hdfPort: #döngü içinde hostları ve portları arama
-        t = Thread(target = baglanTara, args=(hdfHost, int(hdfPort)))
+
+    for port in targetPorts:  # Scan through ports
+        t = Thread(target=connectScan, args=(targetHost, int(port)))
         t.start()
 
 def main():
-    parser = optparse.OptionParser("usage %prog -H" + " <hedeflenen host> -p <hedeflenen port>")
-    parser.add_option("-H", dest="hdfHost", type="string", help="specify hedef host")
+    parser = optparse.OptionParser("usage %prog -H <target host> -p <target port>")
+    parser.add_option("-H", dest="targetHost", type="string", help="specify target host")
     parser.add_option(
         "-p",
-        dest="hdfPort",
+        dest="targetPorts",
         type="string",
-        help="virgülle ayrılmış hedef bağlantı noktalarını belirtin",
+        help="specify target ports separated by commas",
     )
     (options, args) = parser.parse_args()
-    hdfHost = options.hdfHost
-    hdfPort = str(options.hdfPort).split(",")
-    if (hdfHost == None) | (hdfPort[0] == None):
+
+    targetHost = options.targetHost
+    targetPorts = str(options.targetPorts).split(",")
+
+    if (targetHost is None) or (targetPorts[0] is None):
         print(parser.usage)
         exit(0)
-    portTara(hdfHost, hdfPort)
+
+    portScan(targetHost, targetPorts)
 
 
 if __name__ == "__main__":
